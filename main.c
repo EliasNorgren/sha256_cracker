@@ -36,9 +36,12 @@ typedef struct info
 }info ;
 
 int found = 0;
+int feeder_done = 0;
 sem_t work_lock;
 sem_t found_lock;
 sem_t target_lock;
+sem_t words_in_que;
+sem_t feeder_lock;
 
 void pad_string(BYTE src[], char dst[])
 {
@@ -63,7 +66,10 @@ long generate_words(int word_length, Queue *work_que){
     for (int i = 0; i < problem_size ;i++) {
         
         tmp[word_length] = '\0';
+        sem_wait(&work_lock);
         queue_enqueue(work_que, tmp);
+        sem_post(&words_in_que);
+        sem_post(&work_lock);
 
         tmp[word_length-1]++;
         k = word_length-1;
@@ -106,9 +112,18 @@ void *thread_pool(void * arg)
         sem_wait(&work_lock);
         BYTE *word = NULL;
         if(queue_is_empty(args->que)){
-            continue;
+
+            sem_wait(&feeder_lock);
+            if(feeder_done){
+                printf("%d exited without finding word\n",id);
+                pthread_exit(NULL);               
+            }else{
+                continue;
+            }
+            sem_post(&feeder_lock);
         }
         word = queue_dequeue(args->que);
+        sem_wait(&words_in_que);
         sem_post(&work_lock);
 
         //printf("Testing word %s\n", word);
@@ -137,7 +152,7 @@ void *thread_pool(void * arg)
         //printf("----\n");
     }
 
-    
+    pthread_exit(NULL);
     return NULL;
 }
 
@@ -159,27 +174,12 @@ int main(int argc, char **argv)
     //                 0xc6,0x48,0xfd,0x86,0x5a,0x2a,0xf6,0xa2,0x2c, 0xc2};
     signal(SIGINT,sig_handler);
     found = 0;
-    char target[] = {"a9f51566bd6705f7ea6ad54bb9deb449f795582d6529a0e22207b8981233ec58"};
-
-    // SHA256_CTX ctx;
-    // sha256_init(&ctx);
-    // BYTE name[] = {"TEST"};
-    // sha256_update(&ctx, name, 4);
-    // BYTE buf[SHA256_BLOCK_SIZE];
-    // sha256_final(&ctx, buf);
-
-    // char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];
-    // memset(padded_buf, '\0', 65);
-    // pad_string(buf, padded_buf);
-
-    // printf("%s\n", padded_buf);
-    // printf("%s\n", target);
-
-
-    // printf("\n%s\n", !memcmp(target, padded_buf, 32) ? "SAME\n" : "FAIL\n");
+    char target[] = {"f85b917399a6d4f8f17d0fb54025eba154969dc5ee101aee76e2b355df89e7c6"};
     sem_init(&work_lock, 0, 1);
     sem_init(&found_lock, 0, 1);
     sem_init(&target_lock, 0, 1);
+    sem_init(&words_in_que, 0, 0);
+    sem_init(&feeder_lock, 0, 1);
 
 
     pthread_t cracker_threads[NO_THREADS];
@@ -196,6 +196,11 @@ int main(int argc, char **argv)
     }
 
     long ret = generate_words(1, work_que);
+    
+    sem_wait(&feeder_lock);
+    feeder_done = 1;
+    sem_post(&feeder_lock);
+
 
     for(int i = 0; i < NO_THREADS; i++){
         pthread_join(cracker_threads[i], NULL);
@@ -205,5 +210,7 @@ int main(int argc, char **argv)
     queue_destroy(work_que);
     sem_destroy(&work_lock);
     sem_destroy(&found_lock);
+    sem_destroy(&words_in_que);
+    sem_destroy(&feeder_lock);
     return 69;
 }
