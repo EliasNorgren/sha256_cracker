@@ -16,7 +16,7 @@ int main()
   add_values(que);
 
   bool ok = false;
-  // Checks that values are correct.
+  //Checks that values are correct.
   ok = verify_values(que);
   printf("Test the functioning of the queue ... %s\n", ok? "PASS" : "FAIL");
 

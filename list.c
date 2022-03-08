@@ -68,9 +68,9 @@ void list_destroy(List *lst)
       ListPos end = list_end(lst);
 
       while (! list_pos_equal(first,end)) {
-
+         ListPos first_next = list_next(first);
          list_remove(first);
-         first = list_next(first);
+         first = first_next;
       }
    }
 
@@ -126,7 +126,6 @@ ListPos list_next(ListPos pos)
 {
    ListPos next = { .node = pos.node -> next};
    return next;
-
 }
 
 
