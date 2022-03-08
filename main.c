@@ -25,8 +25,6 @@
 
 #define CHAR_START 33
 #define CHAR_END 125
-#define UP_TO 7
-#define NO_THREADS 1
 
 typedef struct info
 {
@@ -37,6 +35,7 @@ typedef struct info
 
 int found = 0;
 int feeder_done = 0;
+int no_threads;
 sem_t work_lock;
 sem_t found_lock;
 sem_t target_lock;
@@ -102,7 +101,7 @@ void *thread_pool(void * arg)
         sem_wait(&found_lock);
         if(found){
             pthread_exit(NULL);
-            printf(" exited\n");
+            printf("%d exited\n", id);
         }
         sem_post(&found_lock);
 
@@ -110,6 +109,11 @@ void *thread_pool(void * arg)
         
 
         sem_wait(&work_lock);
+        int no_words;
+        sem_getvalue(&words_in_que, &no_words);
+        if(no_words % 1000 == 0){
+            printf("%d ord kvar i kön \\%d\n", no_words, id);
+        }
         BYTE *word = NULL;
         if(queue_is_empty(args->que)){
 
@@ -126,10 +130,6 @@ void *thread_pool(void * arg)
         sem_wait(&words_in_que);
         sem_post(&work_lock);
 
-        //printf("Testing word %s\n", word);
-        //printf("\n");
-        //printf("\n");
-        //printf("wordLenght = %ld \n", strlen((char*)word));
         sha256_init(&ctx);
         sha256_update(&ctx, word, strlen((char*)word));
         BYTE buf[SHA256_BLOCK_SIZE];
@@ -144,12 +144,13 @@ void *thread_pool(void * arg)
             found = 1;
             printf("%d exited\nWord is %s\n",id ,  word);
             free(word);
-            pthread_exit(NULL);
-            
-            sem_post(&found_lock);
+            for(int i = 0; i < no_threads; i++){
+                sem_post(&found_lock);
+            }
+            pthread_exit(NULL);                    
         }
         free(word);
-        //printf("----\n");
+     
     }
 
     pthread_exit(NULL);
@@ -169,12 +170,15 @@ void sig_handler(int signum){
 
 int main(int argc, char **argv)
 {   
-
+    const int word_length = atoi(argv[1]);
     // BYTE target[] = {0x94, 0xee, 0x05, 0x93, 0x35, 0xe5, 0x87, 0xe5, 0x01, 0xcc, 0x4b, 0xf9, 0x06, 0x13, 0xe0,0x81,0x4f,0x00,0xa7,0xb0,0x8b,0xc7,
     //                 0xc6,0x48,0xfd,0x86,0x5a,0x2a,0xf6,0xa2,0x2c, 0xc2};
     signal(SIGINT,sig_handler);
     found = 0;
-    char target[] = {"f85b917399a6d4f8f17d0fb54025eba154969dc5ee101aee76e2b355df89e7c6"};
+    //char target[] = {"b66d23c42475dff047d7a2538db25533469bd58a644b8da2a8c3c31c39d42ef4"};
+    char *target = argv[2];
+    no_threads = atoi(argv[3]);
+
     sem_init(&work_lock, 0, 1);
     sem_init(&found_lock, 0, 1);
     sem_init(&target_lock, 0, 1);
@@ -182,7 +186,7 @@ int main(int argc, char **argv)
     sem_init(&feeder_lock, 0, 1);
 
 
-    pthread_t cracker_threads[NO_THREADS];
+    pthread_t cracker_threads[no_threads];
     Queue *work_que = queue_create();
     
     
@@ -191,18 +195,18 @@ int main(int argc, char **argv)
     arguments.global_target = target;
     arguments.target_length = strlen(target);
 
-    for(int i = 0; i < NO_THREADS; i++){
+    for(int i = 0; i < no_threads; i++){
         pthread_create(&cracker_threads[i], NULL, thread_pool, &arguments);        
     }
 
-    long ret = generate_words(1, work_que);
-    
+    long ret = generate_words(word_length, work_que);
+    printf("%ld words in workque\n", ret);
     sem_wait(&feeder_lock);
     feeder_done = 1;
     sem_post(&feeder_lock);
 
 
-    for(int i = 0; i < NO_THREADS; i++){
+    for(int i = 0; i < no_threads; i++){
         pthread_join(cracker_threads[i], NULL);
     }
 
