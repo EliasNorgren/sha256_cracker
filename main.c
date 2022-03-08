@@ -18,6 +18,7 @@
 #include <memory.h>
 #include <string.h>
 #include <stdint.h>
+#include<signal.h>
 
 #include "sha256.h"
 #include "queue.h"
@@ -29,13 +30,12 @@
 
 typedef struct info
 {
-    Queue *que;
-    int *found;
+    Queue *que;  
     char *global_target;
     int target_length;
 }info ;
 
-
+int found = 0;
 sem_t work_lock;
 sem_t found_lock;
 sem_t target_lock;
@@ -48,7 +48,7 @@ void pad_string(BYTE src[], char dst[])
         sprintf(temp, "%02hhx", src[i]);
         dst[index] = temp[0];
         dst[index+1] = temp[1];
-        printf("%d-%d -> %c%c\n", index, index+1, temp[0], temp[1]);
+        //printf("%d-%d -> %c%c\n", index, index+1, temp[0], temp[1]);
         index += 2;
     }
 }
@@ -78,67 +78,88 @@ long generate_words(int word_length, Queue *work_que){
 
 void *thread_pool(void * arg)
 {   
+    pid_t id = pthread_self();
+
+    printf("%d started\n", id);
+
     sem_wait(&target_lock);
     info *args = (info*) arg;
     int target_length = args->target_length;
     char target[target_length];
     memcpy(target, args->global_target, target_length);
+    printf("Target = %s\n", target);
     sem_post(&target_lock);
-
     SHA256_CTX ctx;
-    sha256_init(&ctx);
+
 
     while(1){
-        
         sem_wait(&found_lock);
-        if(args->found){
-         pthread_exit(NULL);
+        if(found){
+            pthread_exit(NULL);
+            printf(" exited\n");
         }
         sem_post(&found_lock);
 
-
+        
+        
 
         sem_wait(&work_lock);
-
         BYTE *word = NULL;
-        queue_enqueue(args->que, word);
-
+        if(queue_is_empty(args->que)){
+            continue;
+        }
+        word = queue_dequeue(args->que);
         sem_post(&work_lock);
 
+        //printf("Testing word %s\n", word);
+        //printf("\n");
+        //printf("\n");
+        //printf("wordLenght = %ld \n", strlen((char*)word));
+        sha256_init(&ctx);
         sha256_update(&ctx, word, strlen((char*)word));
         BYTE buf[SHA256_BLOCK_SIZE];
         sha256_final(&ctx, buf);
         char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];
         memset(padded_buf, '\0', 65);
         pad_string(buf, padded_buf);
-        printf("%s", buf);
-    
+        //printf("%s\n", padded_buf);
+        if(memcmp(target, padded_buf, sizeof(unsigned char) * 64) == 0){
+        
+            sem_wait(&found_lock);
+            found = 1;
+            printf("%d exited\nWord is %s\n",id ,  word);
+            free(word);
+            pthread_exit(NULL);
+            
+            sem_post(&found_lock);
+        }
+        free(word);
+        //printf("----\n");
     }
 
     
     return NULL;
 }
 
-int create_threads(int no_threads, pthread_t *threads, void *arg)
-{
-    for(int i = 0; i < no_threads; i++){
-        if(pthread_create(&threads[i], NULL, thread_pool, arg) != 0){
-            fprintf(stderr, "Error pthread_create\n");
-            return -1;
-        }
-    }
-    return 1;
+
+
+void sig_handler(int signum){
+
+  sem_wait(&found_lock);
+  found = 1;
+  sem_post(&found_lock);
+  printf("\nInside handler function\n");
+  exit(1);
 }
-
-
 
 int main(int argc, char **argv)
 {   
 
     // BYTE target[] = {0x94, 0xee, 0x05, 0x93, 0x35, 0xe5, 0x87, 0xe5, 0x01, 0xcc, 0x4b, 0xf9, 0x06, 0x13, 0xe0,0x81,0x4f,0x00,0xa7,0xb0,0x8b,0xc7,
     //                 0xc6,0x48,0xfd,0x86,0x5a,0x2a,0xf6,0xa2,0x2c, 0xc2};
-
-    char target[] = {"94ee059335e587e501cc4bf90613e0814f00a7b08bc7c648fd865a2af6a22cc2"};
+    signal(SIGINT,sig_handler);
+    found = 0;
+    char target[] = {"a9f51566bd6705f7ea6ad54bb9deb449f795582d6529a0e22207b8981233ec58"};
 
     // SHA256_CTX ctx;
     // sha256_init(&ctx);
@@ -166,29 +187,23 @@ int main(int argc, char **argv)
     
     
     info arguments;
-    int found = 0;
     arguments.que = work_que;
-    arguments.found = &found;
     arguments.global_target = target;
     arguments.target_length = strlen(target);
 
     for(int i = 0; i < NO_THREADS; i++){
-        
-
-
+        pthread_create(&cracker_threads[i], NULL, thread_pool, &arguments);        
     }
 
     long ret = generate_words(1, work_que);
-    
-    while(!queue_is_empty(work_que)){
-        free(queue_dequeue(work_que));
+
+    for(int i = 0; i < NO_THREADS; i++){
+        pthread_join(cracker_threads[i], NULL);
     }
 
-    sem_wait(&found_lock);
-    found = 1;
-    sem_post(&found_lock);
-
-    printf("words = %ld\n", ret);
+//    printf("words = %ld\n", ret);
     queue_destroy(work_que);
+    sem_destroy(&work_lock);
+    sem_destroy(&found_lock);
     return 69;
 }
