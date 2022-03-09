@@ -25,17 +25,20 @@
 
 #define CHAR_START 33
 #define CHAR_END 125
+#define THREAD_BUFFERT 100000
 
 typedef struct info
 {
     Queue *que;  
     char *global_target;
     int target_length;
+    
 }info ;
 
 int found = 0;
 int feeder_done = 0;
 int no_threads;
+char *answer;
 sem_t work_lock;
 sem_t found_lock;
 sem_t target_lock;
@@ -86,73 +89,107 @@ void *thread_pool(void * arg)
     pid_t id = pthread_self();
 
     printf("%d started\n", id);
-
-    sem_wait(&target_lock);
+    // printf("wait %d\n", id);
+    // sem_wait(&target_lock);
+    int threads_local = no_threads;
     info *args = (info*) arg;
     int target_length = args->target_length;
     char target[target_length];
     memcpy(target, args->global_target, target_length);
-    printf("Target = %s\n", target);
-    sem_post(&target_lock);
+    // printf("Target = %s\n", target);
+    // sem_post(&target_lock);
+    // printf("post %d\n", id);
+
     SHA256_CTX ctx;
 
 
     while(1){
+        // printf("--iterating--%d\n", id);
         sem_wait(&found_lock);
         if(found){
+            sem_post(&found_lock);
+            printf("%d exited becaause someone else found solution\n", id);
             pthread_exit(NULL);
-            printf("%d exited\n", id);
+            
         }
         sem_post(&found_lock);
 
-        
-        
-
+        printf("worklock %d\n", id);
         sem_wait(&work_lock);
         int no_words;
         sem_getvalue(&words_in_que, &no_words);
-        if(no_words % 1000 == 0){
+        if(no_words % 100 == 0){
             printf("%d ord kvar i kön \\%d\n", no_words, id);
         }
-        BYTE *word = NULL;
-        if(queue_is_empty(args->que)){
+
+        // BYTE *word = NULL;
+        // int respons = no_words/threads_local;
+        int respons = THREAD_BUFFERT;
+        if(no_words == 0){
 
             sem_wait(&feeder_lock);
             if(feeder_done){
-                printf("%d exited without finding word\n",id);
+                sem_post(&feeder_lock);
+                printf("%d exited because queue is empty\n",id);
                 pthread_exit(NULL);               
             }else{
-                continue;
+                // sem_post(&feeder_lock);
+                // sem_post(&work_lock);
+                // printf("CONTINU\n");
+                // continue;
+                sem_wait(&words_in_que);
+                respons = 1;
             }
             sem_post(&feeder_lock);
         }
-        word = queue_dequeue(args->que);
-        sem_wait(&words_in_que);
-        sem_post(&work_lock);
-
-        sha256_init(&ctx);
-        sha256_update(&ctx, word, strlen((char*)word));
-        BYTE buf[SHA256_BLOCK_SIZE];
-        sha256_final(&ctx, buf);
-        char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];
-        memset(padded_buf, '\0', 65);
-        pad_string(buf, padded_buf);
-        //printf("%s\n", padded_buf);
-        if(memcmp(target, padded_buf, sizeof(unsigned char) * 64) == 0){
-        
-            sem_wait(&found_lock);
-            found = 1;
-            printf("%d exited\nWord is %s\n",id ,  word);
-            free(word);
-            for(int i = 0; i < no_threads; i++){
-                sem_post(&found_lock);
-            }
-            pthread_exit(NULL);                    
+        if(respons >= no_words){
+            respons = no_words;
         }
-        free(word);
+        
+        unsigned char *words[respons];
+        for(int i = 0; i < respons; i++){
+            words[i] = queue_dequeue(args->que);
+            sem_wait(&words_in_que);
+        }
+        sem_post(&work_lock);
+        printf("work post %d\n", id);
+        
+
+
+        for(int i = 0; i < respons; i++){
+            
+            if(i % 1000 == 0){
+                printf("%d iteration \\%d\n", i, id);
+            }
+         
+            sha256_init(&ctx);
+            sha256_update(&ctx, words[i], strlen((char*)words[i]));
+            BYTE buf[SHA256_BLOCK_SIZE];
+            sha256_final(&ctx, buf);
+            char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];
+            memset(padded_buf, '\0', 65);
+            pad_string(buf, padded_buf);
+        
+            if(memcmp(target, padded_buf, sizeof(unsigned char) * 64) == 0){
+        
+                sem_wait(&found_lock);
+                found = 1;
+                answer = words[i];
+                printf("%d exited and found word: %s-------------------------------------------------------\n",id ,  words[i]);
+                for(int i = 0; i < no_threads+1; i++){
+                    sem_post(&found_lock);
+                }
+                for(int j = i+1; j < respons; j++){
+                    free(words[j]);
+                }
+                pthread_exit(NULL);                    
+            }
+            // printf("%d tested %s\n", id , words[i]);
+            free(words[i]);
+        }
      
     }
-
+    printf("%d exited after loop, weird\n",id);
     pthread_exit(NULL);
     return NULL;
 }
@@ -165,6 +202,8 @@ void sig_handler(int signum){
   found = 1;
   sem_post(&found_lock);
   printf("\nInside handler function\n");
+  printf("ANSWER WAS %s\n", answer);
+  free(answer);
   exit(1);
 }
 
@@ -200,7 +239,7 @@ int main(int argc, char **argv)
     }
 
     long ret = generate_words(word_length, work_que);
-    printf("%ld words in workque\n", ret);
+    printf("%ld words created by generator\n", ret);
     sem_wait(&feeder_lock);
     feeder_done = 1;
     sem_post(&feeder_lock);
@@ -216,5 +255,9 @@ int main(int argc, char **argv)
     sem_destroy(&found_lock);
     sem_destroy(&words_in_que);
     sem_destroy(&feeder_lock);
+
+    printf("ANSWER WAS %s\n", answer);
+    free(answer);
+
     return 69;
 }
