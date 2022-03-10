@@ -31,6 +31,7 @@ https://text-compare.com/
 #include <stdint.h>
 #include<signal.h>
 #include <ulimit.h>
+#include <time.h>
 
 #include "sha256.h"
 #include "queue.h"
@@ -47,6 +48,7 @@ typedef struct info
     const int no_threads;
     unsigned char *answer;
     int feeder_done;
+    time_t time;
 }info ;
 
 int found = 0;
@@ -229,7 +231,7 @@ void *thread_pool(void * arg)
             pad_string(buf, padded_buf);
         
             if(memcmp(target, padded_buf, sizeof(unsigned char) * 64) == 0){
-        
+                args->time = clock() - args->time;
                 sem_wait(&found_lock);
                 args->answer = words[i];
                 found = 1;  
@@ -307,6 +309,8 @@ int main(int argc, char **argv)
     // arguments.que = work_que;
     // arguments.global_target = target;
     // arguments.target_length = strlen(argv[2]);
+    
+    arguments.time = clock();
 
     for(int i = 0; i < no_threads; i++){
         pthread_create(&cracker_threads[i], NULL, thread_pool, &arguments);        
@@ -336,6 +340,7 @@ int main(int argc, char **argv)
     sem_destroy(&threads_at_work);
 
     printf("ANSWER WAS %s\n", arguments.answer);
+    printf("Generated in %f seconds\n", ((double) arguments.time) / CLOCKS_PER_SEC);
     free(arguments.answer);
     fclose(out);
     fclose(gereate_out);
