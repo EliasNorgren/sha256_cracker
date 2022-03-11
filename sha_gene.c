@@ -16,7 +16,7 @@ void pad_string(BYTE src[], unsigned char dst[])
     }
 }
 
-
+//test
 int main(int argc, char **argv){
     SHA256_CTX ctx;
     sha256_init(&ctx);
