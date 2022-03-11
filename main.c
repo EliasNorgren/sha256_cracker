@@ -10,6 +10,100 @@ https://emn178.github.io/online-tools/sha256.html
 Text comparatOr
 https://text-compare.com/
 
+-------------
+
+mutex = 1 
+Full = 0 // Initially, all slots are empty. Thus full slots are 0 
+Empty = n // All slots are empty initially 
+
+do{
+
+//produce an item
+
+wait(empty);
+wait(mutex);
+
+//place in buffer
+
+signal(mutex);
+signal(full);
+
+}while(true)
+
+When producer produces an item then the value of “empty” is reduced by 1 because one slot will be filled now. The value of mutex is also reduced to prevent consumer to access the buffer. Now, the producer has placed the item and thus the value of “full” is increased by 1. The value of mutex is also increased by 1 because the task of producer has been completed and consumer can access the buffer. 
+
+Solution for Consumer – 
+
+do{
+
+wait(full);
+wait(mutex);
+
+// remove item from buffer
+
+signal(mutex);
+signal(empty);
+
+// consumes item
+
+}while(true)
+
+
+
+---------
+
+
+Semaphore algorithm
+
+Initialization of semaphores – 
+mutex = 1 
+Full = 0 // Initially, all slots are empty. Thus full slots are 0 
+
+Producer{
+    do{
+    //produce an item
+
+    wait(mutex);
+    //place in buffer
+    signal(mutex);
+
+    signal(full);
+
+    }while(none left)
+
+    wait(feeder_done)
+    feeder_done = true
+    signal(feeder_done)
+
+}
+
+Consumer{
+    do{
+    
+    wait(feeder_done);
+    if(feeder_doner){
+        signal(feeder_done)
+        exit
+    }
+    signal(feeder_done)
+    
+
+    wait(full);
+    wait(mutex);
+    
+    X = full + 1
+
+    // remove X item from buffer
+    signal(x) X times
+    
+    signal(mutex);
+
+    // consumes item
+
+    }while(true)  
+}
+
+
 */
 
 #include <stdio.h>
@@ -41,7 +135,7 @@ https://text-compare.com/
 
 #define CHAR_START 33
 #define CHAR_END 125
-#define THREAD_BUFFERT 10000
+#define THREAD_BUFFERT 100
 
 typedef struct info
 {
@@ -58,12 +152,14 @@ int found = 0;
 // int feeder_done = 0;
 // int no_threads;
 // unsigned char *answer;
-sem_t work_lock;
+sem_t mutex;
 sem_t found_lock;
-sem_t target_lock;
-sem_t words_in_que;
 sem_t feeder_lock;
 sem_t threads_at_work;
+sem_t empty;
+sem_t full;
+sem_t fuck_mutex;
+
 
 FILE *out;
 FILE *gereate_out;
@@ -92,15 +188,10 @@ long generate_words(int word_length, Queue *work_que){
         
         tmp[word_length] = '\0';
         //printf("PRODUCER LOCK");
-        sem_wait(&work_lock);
-        //fprintf(gereate_out, "%s\n", tmp);
-
-        // int no_words;
-        // sem_getvalue(&words_in_que, no_words);
-        // Detta ger "KILLED" ifall för mycket hinner läggas in i kön.
+        sem_wait(&mutex);
         queue_enqueue(work_que, tmp);
-        sem_post(&words_in_que);
-        sem_post(&work_lock);
+        sem_post(&mutex);
+        sem_post(&full);
        // printf("PRODUCER POST");
 
         tmp[word_length-1]++;
@@ -114,28 +205,32 @@ long generate_words(int word_length, Queue *work_que){
     return problem_size;
 }
 
+unsigned long calc_total_problem_size(int word_length){
+    unsigned long sum = 0;
+    for(int i = 1; i <= word_length; i++){
+        sum += pow(CHAR_END-CHAR_START+1, i);
+    }
+    return sum;
+}
+
 void *thread_pool(void * arg)
 {   
+    //sleep(3);
     pid_t id = pthread_self();
 
     printf("%u started\n", id);
-    // printf("wait %d\n", id);
-    // sem_wait(&target_lock);
+
     
     info *args = (info*) arg;
     int threads_local = args->no_threads;
     int target_length = args->target_length;
     char target[target_length];
     memcpy(target, args->global_target, target_length);
-    // printf("Target = %s\n", target);
-    // sem_post(&target_lock);
-    // printf("post %d\n", id);
-
     SHA256_CTX ctx;
 
 
     while(1){
-        // printf("--iterating--%d\n", id);
+        printf("--iterating--%d\n", id);
         sem_wait(&found_lock);
             if(found){
                 sem_post(&found_lock);
@@ -147,57 +242,65 @@ void *thread_pool(void * arg)
         sem_post(&found_lock);
 
         //printf("worklock %u\n", id);
-        sem_wait(&work_lock);
+        sem_wait(&fuck_mutex);
+        sem_wait(&full);
+        sem_wait(&mutex);
             int no_words;
-            sem_getvalue(&words_in_que, &no_words);
-            // no_words ++;
+            sem_getvalue(&full, &no_words);
+            printf("%u no_words = %d\n", id,no_words);
+            no_words ++;
             if(no_words % 100 == 0){
                 printf("%d ord kvar i kön \\%u\n", no_words, id);
             }
-
+            // int respons = no_words;
             // BYTE *word = NULL;
             int threads_working;
             sem_getvalue(&threads_at_work, &threads_working);
             
             int respons = args->no_threads >= no_words ? no_words : no_words/ (args->no_threads - threads_working);
             printf("id %u: %d / (%d - %d) = %d\n", id, no_words, args->no_threads, threads_working, respons);
-            //int respons = THREAD_BUFFERT;
-            if(no_words <= 0){
-                //printf("feeder_lock %u\n", id);  
-                sem_wait(&feeder_lock);
-                if(args->feeder_done){
-                    sem_post(&feeder_lock);
-                    sem_post(&work_lock);
-                    //printf("feeder unlocked %u\n", id);  
-                    printf("%u exited because feeder is done empty\n",id);
-                    // pthread_exit(NULL);  
-                    return 0;             
-                }else{
-                    // sem_post(&feeder_lock);
-                    // sem_post(&work_lock);
-                    // printf("CONTINU\n");
-                    // continue;
-                    sem_post(&feeder_lock);
-                    respons = 1;
-                }
+            // //int respons = THREAD_BUFFERT;
+            // if(no_words <= 0){
+            //     //printf("feeder_lock %u\n", id);  
+            //     sem_wait(&feeder_lock);
+            //     if(args->feeder_done){
+            //         sem_post(&feeder_lock);
+            //         sem_post(&mutex);
+            //         //printf("feeder unlocked %u\n", id);  
+            //         printf("%u exited because feeder is done empty\n",id);
+            //         // pthread_exit(NULL);  
+            //         return 0;             
+            //     }else{
+            //         // sem_post(&feeder_lock);
+            //         // sem_post(&mutex);
+            //         // printf("CONTINU\n");
+            //         // continue;
+            //         sem_post(&feeder_lock);
+            //         respons = 1;
+            //     }
                 
-            }
-            if(respons >= no_words){
-                respons = no_words;
-            }
+            // }
+            // if(respons >= no_words){
+            //     respons = no_words;
+            // }
             if(respons > 1000000){
                 respons = 1000000;
+            }
+            printf("%u Queueu size = %d\n", id, queue_size(args->que));
+            if(respons >= queue_size(args->que)){
+                respons = queue_size(args->que);
             }
             unsigned char *words[respons];
             for(int i = 0; i < respons; i++){
                 words[i] = queue_dequeue(args->que);
-                sem_wait(&words_in_que);
+                sem_post(&full);
             }
-        sem_post(&work_lock);
+        sem_post(&mutex);
+        sem_post(&fuck_mutex);
         
-        if(respons == 0){
-            continue;
-        }
+        // if(respons == 0){
+        //     continue;
+        // }
 
 
 
@@ -272,7 +375,7 @@ void sig_handler(int signum){
   //printf("ANSWER WAS %s\n", answer);
   
 //   for(int i = 0; i < 3; i++){
-//       sem_post(&work_lock);
+//       sem_post(&mutex);
 //   }
     
   //free(answer);
@@ -294,14 +397,21 @@ int main(int argc, char **argv)
     found = 0;
     //char target[] = {"b66d23c42475dff047d7a2538db25533469bd58a644b8da2a8c3c31c39d42ef4"};
     char *target = argv[2];
+    unsigned long total_problem_size = calc_total_problem_size(word_length);
+    if(total_problem_size == 0){
+        fprintf(stderr, "Cant handle size\n");
+        exit(0);
+    }
+    printf("total problem size = %ld\n", total_problem_size);
     int no_threads = atoi(argv[3]);
-
-    sem_init(&work_lock, 0, 1);
+    
+    sem_init(&mutex, 0, 1);
     sem_init(&found_lock, 0, 1);
-    sem_init(&target_lock, 0, 1);
-    sem_init(&words_in_que, 0, 0);
     sem_init(&feeder_lock, 0, 1);
     sem_init(&threads_at_work, 0, 0);
+    sem_init(&empty, 0, total_problem_size);
+    sem_init(&full, 0, 0);
+    sem_init(&fuck_mutex, 0, 1);
 
 
     pthread_t cracker_threads[no_threads];
@@ -336,11 +446,11 @@ int main(int argc, char **argv)
 
 //    printf("words = %ld\n", ret);
     queue_destroy(work_que);
-    sem_destroy(&work_lock);
+    sem_destroy(&mutex);
     sem_destroy(&found_lock);
-    sem_destroy(&words_in_que);
     sem_destroy(&feeder_lock);
     sem_destroy(&threads_at_work);
+    sem_destroy(&fuck_mutex);
 
     printf("ANSWER WAS %s\n", arguments.answer);
     printf("Generated in %f seconds\n", ((double) arguments.time) / CLOCKS_PER_SEC);

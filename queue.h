@@ -34,6 +34,7 @@
 typedef struct queue
 {
     List *list;
+    int size;
 } Queue;
 
 
@@ -93,5 +94,7 @@ unsigned char *queue_dequeue(Queue *q);
  * @return       True if empty. Else false. 
  */
 bool queue_is_empty(const Queue *q);
+
+int queue_size(const Queue *q);
 
 #endif /* QUEUE_H */

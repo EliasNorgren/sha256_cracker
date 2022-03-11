@@ -28,12 +28,13 @@ int main()
 
 void add_values(Queue *que)
 {
-  char string[2] = "A";
+  unsigned char string[2] = "A";
 
   for (char c = 'A'; c <= 'Z'; c++) {
 
       string[0] = c;
-      queue_enqueue(que, string);
+      queue_enqueue(que, (unsigned char *) string);
+      printf("%d\n",queue_size(que));
   }
 }
 
@@ -41,7 +42,9 @@ bool verify_values(Queue *que)
 {
   for (char ch = 'A'; ch <= 'Z'; ch++) {
 
-      char *str = queue_dequeue(que);
+      unsigned char *str = queue_dequeue(que);
+      printf("%d\n",queue_size(que));
+
 
       if ( *str != ch){
 
