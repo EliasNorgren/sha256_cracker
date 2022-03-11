@@ -247,8 +247,8 @@ void *thread_pool(void * arg)
         sem_wait(&mutex);
             int no_words;
             sem_getvalue(&full, &no_words);
-            printf("%u no_words = %d\n", id,no_words);
             no_words ++;
+            printf("%u no_words = %d\n", id,no_words);       
             if(no_words % 100 == 0){
                 printf("%d ord kvar i kön \\%u\n", no_words, id);
             }
