@@ -86,16 +86,17 @@ Consumer{
         exit
     }
     signal(feeder_done)
-    
 
+    
+    wait(fuck_sem)
     wait(full);
-    wait(mutex);
+    wai(mutex)
     
     X = full + 1
 
     // remove X item from buffer
-    signal(x) X times
-    
+    wait(full) X times
+    signal(fuck_sem)
     signal(mutex);
 
     // consumes item
@@ -241,14 +242,16 @@ void *thread_pool(void * arg)
             }
         sem_post(&found_lock);
 
-        //printf("worklock %u\n", id);
+        //printf("fuck lock %u\n", id);
         sem_wait(&fuck_mutex);
+        //printf("full lock %u\n", id);
         sem_wait(&full);
+        //printf("mutex lock %u\n", id);
         sem_wait(&mutex);
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;
-            printf("%u no_words = %d\n", id,no_words);       
+            //printf("%u no_words = %d\n", id,no_words);       
             if(no_words % 100 == 0){
                 printf("%d ord kvar i kön \\%u\n", no_words, id);
             }
@@ -258,7 +261,7 @@ void *thread_pool(void * arg)
             sem_getvalue(&threads_at_work, &threads_working);
             
             int respons = args->no_threads >= no_words ? no_words : no_words/ (args->no_threads - threads_working);
-            printf("id %u: %d / (%d - %d) = %d\n", id, no_words, args->no_threads, threads_working, respons);
+            //printf("id %u: %d / (%d - %d) = %d\n", id, no_words, args->no_threads, threads_working, respons);
             // //int respons = THREAD_BUFFERT;
             // if(no_words <= 0){
             //     //printf("feeder_lock %u\n", id);  
@@ -286,17 +289,34 @@ void *thread_pool(void * arg)
             if(respons > 1000000){
                 respons = 1000000;
             }
-            printf("%u Queueu size = %d\n", id, queue_size(args->que));
+            //printf("%u Queueu size = %d\n", id, queue_size(args->que));
             if(respons >= queue_size(args->que)){
                 respons = queue_size(args->que);
             }
             unsigned char *words[respons];
+
+            //int val;
+            //int items = queue_size(args->que);
+           // sem_getvalue(&full, &val);
+          //  printf("-----%u----que = %d\tfull = %d\n", id, items, val);
+
             for(int i = 0; i < respons; i++){
+                
+                //int items = queue_size(args->que);
+              //  int val;
+                //sem_getvalue(&full, &val);
+                //printf("que = %d\tfull = %d\n", items, val);
+
                 words[i] = queue_dequeue(args->que);
-                sem_post(&full);
+                if(i != 0){
+                    sem_wait(&full);
+                }
+            
             }
-        sem_post(&mutex);
+            //printf("Ending loop\n");
+
         sem_post(&fuck_mutex);
+        sem_post(&mutex);
         
         // if(respons == 0){
         //     continue;
@@ -347,15 +367,19 @@ void *thread_pool(void * arg)
                 printf("%u exited and found word: %s-------------------------------------------------------\n",id ,  words[i]);
                 for(int i = 0; i < threads_local+1; i++){
                     sem_post(&found_lock);
+                    sem_post(&fuck_mutex);
+                    sem_post(&full);
+
                 }
 
                 // pthread_exit(NULL);
                 return 0;                    
             }
             //printf("%u tested %s\n", id , words[i]);
-            fprintf(out, "%u tested %s\n", id , words[i]);
+            //fprintf(out, "%u tested %s\n", id , words[i]);
             free(words[i]);
         }
+      //  printf("threads at work lock");
         sem_wait(&threads_at_work);
      
     }
