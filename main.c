@@ -7,7 +7,7 @@ Good links fow workking
 SHA256 Online
 https://emn178.github.io/online-tools/sha256.html
 
-Text comparator
+Text comparatOr
 https://text-compare.com/
 
 */
