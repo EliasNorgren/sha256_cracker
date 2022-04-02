@@ -76,6 +76,8 @@ long generate_words(int word_length, Queue *work_que){
 
     int k;
     long problem_size = pow(CHAR_END-CHAR_START+1, word_length);
+    long int list_max;
+    bool list_max_found = false;
 
     for (int i = 0; i < problem_size ;i++) {
         
@@ -83,7 +85,12 @@ long generate_words(int word_length, Queue *work_que){
         double tot_mem = get_phys_pages();
         double avail_mem = get_avphys_pages();
         //printf("%f / %f = %f\n", avail_mem, tot_mem, avail_mem / tot_mem);
-        if(avail_mem / tot_mem < 0.1){
+        if(!list_max_found && (avail_mem / tot_mem) < 0.1){
+            list_max = work_que->size;
+            list_max_found = true;
+        }
+
+        if(work_que->size >= list_max){
             printf("PRODUCER WAITING - MEMORY LOW\n");
             sem_wait(&memory_mutex);
             printf("PRODUCER STARTING\n");
@@ -295,7 +302,7 @@ int main(int argc, char **argv)
     
     int target_lenthg = strlen(argv[2]);
     info arguments = {.que = work_que, .global_target = target, .target_length = target_lenthg, .no_threads = no_threads, 
-                                                            .total_problem_size = total_problem_size, .work_done = 0};
+                                                            .total_problem_size = total_problem_size, .work_done = 0,};
     
     arguments.time = clock();
 
