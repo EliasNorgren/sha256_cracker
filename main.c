@@ -18,9 +18,10 @@
 #include <memory.h>
 #include <string.h>
 #include <stdint.h>
-#include<signal.h>
+#include <signal.h>
 #include <ulimit.h>
 #include <time.h>
+#include <sys/sysinfo.h>
 
 #include "sha256.h"
 #include "queue.h"
@@ -38,6 +39,9 @@ typedef struct info
     unsigned char *answer;
     int feeder_done;
     time_t time;
+    unsigned long total_problem_size;
+    unsigned long work_done;
+    int i;
 }info ;
 
 int found = 0;
@@ -49,7 +53,7 @@ sem_t threads_at_work;
 sem_t empty;
 sem_t full;
 sem_t fuck_mutex;
-
+sem_t memory_mutex;
 
 FILE *out;
 FILE *gereate_out;
@@ -75,6 +79,16 @@ long generate_words(int word_length, Queue *work_que){
 
     for (int i = 0; i < problem_size ;i++) {
         
+
+        double tot_mem = get_phys_pages();
+        double avail_mem = get_avphys_pages();
+        //printf("%f / %f = %f\n", avail_mem, tot_mem, avail_mem / tot_mem);
+        if(avail_mem / tot_mem < 0.1){
+            printf("PRODUCER WAITING - MEMORY LOW\n");
+            sem_wait(&memory_mutex);
+            printf("PRODUCER STARTING\n");
+        }
+
         tmp[word_length] = '\0';
         sem_wait(&mutex);
         queue_enqueue(work_que, tmp);
@@ -114,6 +128,8 @@ void *thread_pool(void * arg)
     SHA256_CTX ctx;
 
     while(1){
+
+
         sem_wait(&found_lock);
             if(found){
                 sem_post(&found_lock);
@@ -126,13 +142,23 @@ void *thread_pool(void * arg)
         sem_wait(&fuck_mutex);
         sem_wait(&full);
         sem_wait(&mutex);
+
+
+            double tot_mem = get_phys_pages();
+            double avail_mem = get_avphys_pages();
+            int mem_mutex_val;
+            sem_getvalue(&memory_mutex, &mem_mutex_val);
+            if(avail_mem / tot_mem > 0.5 && mem_mutex_val == 0){
+                sem_post(&memory_mutex);
+            }
+
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;     
-            if(no_words % 100 == 0){
-                printf("%d ord kvar i kön \\id = %u\n", no_words, id);
+            if(args->i % 10 == 0){
+                printf("%d ord kvar i kön - %f %% klart - MEM %% = %f - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), 100* ( 1.0 - (avail_mem/tot_mem)),  id);
             }
-
+            args->i += 1;
             int threads_working;
             sem_getvalue(&threads_at_work, &threads_working);
             
@@ -146,7 +172,7 @@ void *thread_pool(void * arg)
                 respons = queue_size(args->que);
             }
             unsigned char *words[respons];
-
+            args->work_done += respons;
             for(int i = 0; i < respons; i++){
 
                 words[i] = queue_dequeue(args->que);
@@ -155,6 +181,7 @@ void *thread_pool(void * arg)
                 }
             
             }
+
 
         sem_post(&fuck_mutex);
         sem_post(&mutex);
@@ -254,13 +281,15 @@ int main(int argc, char **argv)
     sem_init(&empty, 0, total_problem_size);
     sem_init(&full, 0, 0);
     sem_init(&fuck_mutex, 0, 1);
+    sem_init(&memory_mutex, 0, 1);
 
 
     pthread_t cracker_threads[no_threads];
     Queue *work_que = queue_create();
     
     int target_lenthg = strlen(argv[2]);
-    info arguments = {.que = work_que, .global_target = target, .target_length = target_lenthg, .no_threads = no_threads};
+    info arguments = {.que = work_que, .global_target = target, .target_length = target_lenthg, .no_threads = no_threads, 
+                                                            .total_problem_size = total_problem_size, .work_done = 0};
     
     arguments.time = clock();
 
@@ -289,6 +318,7 @@ int main(int argc, char **argv)
     sem_destroy(&feeder_lock);
     sem_destroy(&threads_at_work);
     sem_destroy(&fuck_mutex);
+    sem_destroy(&memory_mutex);
 
     printf("ANSWER WAS %s\n", arguments.answer);
     printf("Generated in %f seconds\n", ((double) arguments.time) / CLOCKS_PER_SEC);
