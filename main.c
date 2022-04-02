@@ -85,10 +85,7 @@ long generate_words(int word_length, Queue *work_que){
         double tot_mem = get_phys_pages();
         double avail_mem = get_avphys_pages();
         //printf("%f / %f = %f\n", avail_mem, tot_mem, avail_mem / tot_mem);
-        if(!list_max_found && (avail_mem / tot_mem) < 0.1){
-            list_max = work_que->size;
-            list_max_found = true;
-        }
+
 
         if(work_que->size >= list_max){
             sem_wait(&found_lock);
@@ -103,6 +100,10 @@ long generate_words(int word_length, Queue *work_que){
 
         tmp[word_length] = '\0';
         sem_wait(&mutex);
+        if(!list_max_found && (avail_mem / tot_mem) < 0.1){
+            list_max = work_que->size;
+            list_max_found = true;
+        }
         queue_enqueue(work_que, tmp);
         sem_post(&mutex);
         sem_post(&full);
