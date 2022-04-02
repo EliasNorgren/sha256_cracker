@@ -91,6 +91,11 @@ long generate_words(int word_length, Queue *work_que){
         }
 
         if(work_que->size >= list_max){
+            sem_wait(&found_lock);
+            if(found){
+                return 0;
+            }
+            sem_post(&found_lock);
             printf("PRODUCER WAITING - MEMORY LOW\n");
             sem_wait(&memory_mutex);
             printf("PRODUCER STARTING\n");
