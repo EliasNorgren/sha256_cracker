@@ -3,6 +3,9 @@ FLAGS = -g -std=gnu11 -Wall -lpthread
 CC = gcc
 RM=rm -f
 
+sha256gen: 
+	$(CC) $(FLAGS) -o sha256gen
+
 all:  main.o queue.o list.o sha256.o
 	$(CC) $(FLAGS) -o hash main.o list.o queue.o sha256.o -lm -lpthread
 

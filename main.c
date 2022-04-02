@@ -242,11 +242,11 @@ void *thread_pool(void * arg)
             }
         sem_post(&found_lock);
 
-        //printf("fuck lock %u\n", id);
+        printf("fuck lock %u\n", id);
         sem_wait(&fuck_mutex);
-        //printf("full lock %u\n", id);
+        printf("full lock %u\n", id);
         sem_wait(&full);
-        //printf("mutex lock %u\n", id);
+        printf("mutex lock %u\n", id);
         sem_wait(&mutex);
             int no_words;
             sem_getvalue(&full, &no_words);
@@ -317,14 +317,8 @@ void *thread_pool(void * arg)
 
         sem_post(&fuck_mutex);
         sem_post(&mutex);
-        
-        // if(respons == 0){
-        //     continue;
-        // }
 
-
-
-        printf("%u cracking with size %d\n", id, respons);
+        printf("id %u cracking with size %d\n", id, respons);
         
         sem_post(&threads_at_work);
 
