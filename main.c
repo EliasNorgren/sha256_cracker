@@ -76,7 +76,7 @@ long generate_words(int word_length, Queue *work_que){
 
     int k;
     long problem_size = pow(CHAR_END-CHAR_START+1, word_length);
-    long int list_max;
+    long int list_max = INTMAX_MAX;
     bool list_max_found = false;
 
     for (int i = 0; i < problem_size ;i++) {
