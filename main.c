@@ -143,7 +143,7 @@ void *thread_pool(void * arg)
         sem_wait(&full);
         sem_wait(&mutex);
 
-
+            char *refresh = malloc(1);
             double tot_mem = get_phys_pages();
             double avail_mem = get_avphys_pages();
             int mem_mutex_val;
@@ -151,7 +151,7 @@ void *thread_pool(void * arg)
             if(avail_mem / tot_mem > 0.5 && mem_mutex_val == 0){
                 sem_post(&memory_mutex);
             }
-
+            free(refresh);
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;     
