@@ -170,9 +170,9 @@ void *thread_pool(void * arg)
             
             int respons = args->no_threads >= no_words ? no_words : no_words/ (args->no_threads - threads_working);
 
-            if(respons > 1000000){
-                respons = 1000000;
-            }
+            // if(respons > 1000000){
+            //     respons = 1000000;
+            // }
 
             if(respons >= queue_size(args->que)){
                 respons = queue_size(args->que);
@@ -180,7 +180,7 @@ void *thread_pool(void * arg)
 
 
             
-            if(respons != 1000000){
+            if(respons <= 1000000){
                 int mem_mutex_val;
                 sem_getvalue(&memory_mutex, &mem_mutex_val);
                 if(mem_mutex_val == 0){
@@ -188,7 +188,9 @@ void *thread_pool(void * arg)
                 }
             }
 
-            unsigned char *words[respons];
+            // unsigned char *words[respons];
+            unsigned char **words = malloc(sizeof(char*) * respons);
+
             args->work_done += respons;
             for(int i = 0; i < respons; i++){
 
@@ -218,7 +220,8 @@ void *thread_pool(void * arg)
                 if(local_found){
                     for(int j = i; j < respons; j++){
                         free(words[j]);
-                    } 
+                    }
+                    free(words); 
                     printf("%u exited while working becaause someone else found solution\n", id);
                     return 0;
                    
@@ -240,18 +243,21 @@ void *thread_pool(void * arg)
                 found = 1;  
                 for(int j = i+1; j < respons; j++){
                     free(words[j]);
-                } 
+                }
                 printf("%u exited and found word: %s-------------------------------------------------------\n",id ,  words[i]);
+                free(words);
                 for(int i = 0; i < threads_local+1; i++){
                     sem_post(&found_lock);
                     sem_post(&fuck_mutex);
                     sem_post(&full);
 
-                }
+                }       
                 return 0;                    
             }
             free(words[i]);
+            
         }
+        free(words);
         sem_wait(&threads_at_work);
      
     }
