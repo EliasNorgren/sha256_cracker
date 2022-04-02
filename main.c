@@ -176,6 +176,11 @@ void *thread_pool(void * arg)
 
             if(respons >= queue_size(args->que)){
                 respons = queue_size(args->que);
+                int mem_mutex_val;
+                sem_getvalue(&memory_mutex, &mem_mutex_val);
+                if(mem_mutex_val == 0){
+                    sem_post(&memory_mutex);
+                }
             }
 
 
