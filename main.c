@@ -143,12 +143,14 @@ void *thread_pool(void * arg)
         sem_wait(&full);
         sem_wait(&mutex);
 
-            long int memav = get_avphys_pages() * sysconf(_SC_PAGESIZE);
+
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;     
             if(args->i % 10 == 0){
-                printf("%d ord kvar i kön - %f %% klart - MEM = %ld - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), memav,  id);
+                long int tot_mem = get_phys_pages() * sysconf(_SC_PAGESIZE);
+                long int avail_mem = get_avphys_pages() * sysconf(_SC_PAGESIZE);
+                printf("%d ord kvar i kön - %f %% klart - MEM %% = %f - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), 100* ( 1.0 - ((double)avail_mem/tot_mem)),  id);
             }
             args->i += 1;
             int threads_working;
