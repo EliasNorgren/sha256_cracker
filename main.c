@@ -143,20 +143,12 @@ void *thread_pool(void * arg)
         sem_wait(&full);
         sem_wait(&mutex);
 
-            char *refresh = malloc(1);
-            double tot_mem = get_phys_pages();
-            double avail_mem = get_avphys_pages();
-            int mem_mutex_val;
-            sem_getvalue(&memory_mutex, &mem_mutex_val);
-            if(avail_mem / tot_mem > 0.5 && mem_mutex_val == 0){
-                sem_post(&memory_mutex);
-            }
-            free(refresh);
+            long int memav = get_avphys_pages() * sysconf(_SC_PAGESIZE);
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;     
             if(args->i % 10 == 0){
-                printf("%d ord kvar i kön - %f %% klart - MEM %% = %f - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), 100* ( 1.0 - (avail_mem/tot_mem)),  id);
+                printf("%d ord kvar i kön - %f %% klart - MEM = %ld - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), memav,  id);
             }
             args->i += 1;
             int threads_working;
@@ -171,6 +163,17 @@ void *thread_pool(void * arg)
             if(respons >= queue_size(args->que)){
                 respons = queue_size(args->que);
             }
+
+
+            
+            if(respons != 1000000){
+                int mem_mutex_val;
+                sem_getvalue(&memory_mutex, &mem_mutex_val);
+                if(mem_mutex_val == 0){
+                    sem_post(&memory_mutex);
+                }
+            }
+
             unsigned char *words[respons];
             args->work_done += respons;
             for(int i = 0; i < respons; i++){
@@ -257,6 +260,7 @@ void sig_handler(int signum){
 
 int main(int argc, char **argv)
 {   
+
     out = fopen("outputdata", "w");
     gereate_out = fopen("generate_out", "w");
 
