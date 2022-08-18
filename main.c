@@ -160,16 +160,17 @@ void *thread_pool(void * arg)
             int no_words;
             sem_getvalue(&full, &no_words);
             no_words ++;     
-            if(args->i % 10 == 0){
-                long int tot_mem = get_phys_pages() * sysconf(_SC_PAGESIZE);
-                long int avail_mem = get_avphys_pages() * sysconf(_SC_PAGESIZE);
-                printf("%d ord kvar i kön - %f %% klart - MEM %% = %f - id = %u\n", no_words,(100 * (double)args->work_done / args->total_problem_size), 100* ( 1.0 - ((double)avail_mem/tot_mem)),  id);
-            }
+
             args->i += 1;
             int threads_working;
             sem_getvalue(&threads_at_work, &threads_working);
             
             int respons = args->no_threads >= no_words ? no_words : no_words/ (args->no_threads - threads_working);
+            if(args->i % 1000 == 0){
+                long int tot_mem = get_phys_pages() * sysconf(_SC_PAGESIZE);
+                long int avail_mem = get_avphys_pages() * sysconf(_SC_PAGESIZE);
+                printf("QUE = %d - RESPONSE = %d - %f %% klart - MEM %% = %f - id = %u\n", no_words , respons,(100 * (double)args->work_done / args->total_problem_size), 100* ( 1.0 - ((double)avail_mem/tot_mem)),  id);
+            }
 
             // if(respons > 1000000){
             //     respons = 1000000;
@@ -211,7 +212,7 @@ void *thread_pool(void * arg)
         sem_post(&fuck_mutex);
         sem_post(&mutex);
 
-        printf("id %u cracking with size %d\n", id, respons);
+        //printf("id %u cracking with size %d\n", id, respons);
         
         sem_post(&threads_at_work);
 
