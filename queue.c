@@ -29,7 +29,7 @@ void queue_destroy(Queue *q)
 }
 
 // Enqueues values from the end of the list.
-void queue_enqueue(Queue *q, const unsigned char *value)
+void queue_enqueue(Queue *q, const char *value)
 {
   list_insert(list_end(q -> list) , value);
   q->size ++;

@@ -15,10 +15,10 @@
  * @param in             A string.
  * @return               Same string as input but dynamically allocated
  */
-static unsigned char *clone_string(const unsigned char *in)
+static char *clone_string(const char *in)
 {
     size_t len = strlen((char*) in);
-    unsigned char *out = calloc(len + 1, sizeof(unsigned char));
+    char *out = calloc(len + 1, sizeof(char));
     strcpy((char*) out, (char*) in);
     return out;
 }
@@ -34,7 +34,7 @@ static unsigned char *clone_string(const unsigned char *in)
  * @param value       A string.
  * @return                -
  */
-static struct node *make_node(const unsigned char *value)
+static struct node *make_node(const char *value)
 {
 
    struct node *new_node = malloc(sizeof(struct node));
@@ -136,7 +136,7 @@ ListPos list_prev(ListPos pos)
 }
 
 
-ListPos list_insert(ListPos pos, const unsigned char *value)
+ListPos list_insert(ListPos pos, const char *value)
 {
     // Create a new node.
     struct node *node = make_node(value);
@@ -184,7 +184,7 @@ ListPos list_remove(ListPos pos)
 
 }
 
-const unsigned char *list_inspect(ListPos pos)
+const char *list_inspect(ListPos pos)
 {
    return pos.node -> value;
 }

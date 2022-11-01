@@ -71,7 +71,7 @@ void queue_destroy(Queue *q);
  * @param value      String to enqueue.
  * @return           -
  */
-void queue_enqueue(Queue *q, const unsigned char *value);
+void queue_enqueue(Queue *q, const char *value);
 
 /**
  * @brief Remove the value at the head of the queue.

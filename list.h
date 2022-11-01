@@ -35,7 +35,7 @@ struct node
 {
     struct node *next;
     struct node *prev;
-    unsigned char *value;
+    char *value;
 };
 
 
@@ -170,7 +170,7 @@ ListPos list_prev(ListPos pos);
  * @param value      const char*
  * @return           ListPos of the new elemeent.
  */
-ListPos list_insert(ListPos pos, unsigned const char *value);
+ListPos list_insert(ListPos pos, const char *value);
 
 /**
  * @brief Remove the value at the position and return the position of the
@@ -194,7 +194,7 @@ ListPos list_remove(ListPos pos);
  *
  * @return           const char *
  */
-const unsigned char *list_inspect(ListPos pos);
+const char *list_inspect(ListPos pos);
 
 /**
  * @}
