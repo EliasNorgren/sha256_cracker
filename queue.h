@@ -81,7 +81,7 @@ void queue_enqueue(Queue *q, const char *value);
  * @param q      pointer to Queue
  * @return       String that was on the removed element.
  */
-unsigned char *queue_dequeue(Queue *q);
+char *queue_dequeue(Queue *q);
 
 /**
  * @brief Check if the queue is empty.

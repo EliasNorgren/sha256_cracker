@@ -36,7 +36,7 @@ typedef struct info
     const char *global_target;
     const int target_length;
     const int no_threads;
-    unsigned char *answer;
+    char *answer;
     int feeder_done;
     time_t time;
     unsigned long total_problem_size;
@@ -132,7 +132,7 @@ void generate_words(Queue *work_que, int word_length)
             // printf("[%s]\n",tmp);
             queue_enqueue(work_que, tmp);
             sem_post(&full);
-            if (!list_max_found && (avail_mem / tot_mem) < 0.7)
+            if (!list_max_found && (avail_mem / tot_mem) < 0.1)
             {
                 list_max = work_que->size;
                 list_max_found = true;
@@ -230,7 +230,7 @@ void *thread_pool(void *arg)
         }
 
         // unsigned char *words[respons];
-        unsigned char **words = malloc(sizeof(char *) * respons);
+        char **words = malloc(sizeof(char *) * respons);
 
         args->work_done += respons;
         for (int i = 0; i < respons; i++)
@@ -274,7 +274,7 @@ void *thread_pool(void *arg)
             }
 
             sha256_init(&ctx);
-            sha256_update(&ctx, words[i], strlen((char *)words[i]));
+            sha256_update(&ctx, (const unsigned char *)words[i], strlen((char *)words[i]));
             BYTE buf[SHA256_BLOCK_SIZE];
             sha256_final(&ctx, buf);
             unsigned char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];

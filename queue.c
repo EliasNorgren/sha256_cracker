@@ -5,10 +5,10 @@
 
 // Copy string (internal function)
 // The caller is responsible for freeing the returned pointer.
-static unsigned char *clone_string(const unsigned char *in)
+static char *clone_string(const char *in)
 {
     size_t len = strlen((char*)in);
-    unsigned char *out = calloc(len + 1, sizeof(unsigned char));
+    char *out = calloc(len + 1, sizeof(char));
     strcpy((char*)out, (char*)in);
     return out;
 }
@@ -36,11 +36,11 @@ void queue_enqueue(Queue *q, const char *value)
 }
 
 // Dequeues values from the first list position.
-unsigned char *queue_dequeue(Queue *q)
+char *queue_dequeue(Queue *q)
 {
 
   ListPos first = list_first(q -> list);
-  unsigned char *str = clone_string(first.node -> value);
+  char *str = clone_string(first.node -> value);
   list_remove(first);
   q->size--;
 
