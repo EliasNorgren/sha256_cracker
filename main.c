@@ -23,7 +23,7 @@
 #include <time.h>
 #include <sys/sysinfo.h>
 
-#include "sha256.h"
+#include "md5.h"
 #include "queue.h"
 
 #define CHAR_START 33
@@ -58,19 +58,6 @@ sem_t memory_mutex;
 FILE *out;
 FILE *gereate_out;
 
-void pad_string(BYTE src[], unsigned char dst[])
-{
-    int index = 0;
-    for (int i = 0; i < SHA256_BLOCK_SIZE; i++)
-    {
-        char temp[7];
-        sprintf(temp, "%02hhx", src[i]);
-        dst[index] = temp[0];
-        dst[index + 1] = temp[1];
-        index += 2;
-    }
-}
-
 void generate_words(Queue *work_que, int word_length)
 {
     char tmp[word_length + 1];
@@ -92,6 +79,16 @@ void generate_words(Queue *work_que, int word_length)
             //     printf("Producer list_max waiting\n");
             //     sem_wait(&mutex);
             // }
+            sem_wait(&found_lock);
+            if (found)
+            {
+                sem_post(&found_lock);
+                printf("PRODUCER exited becaause someone found solution\n");
+                sem_post(&mutex);
+                sem_post(&found_lock);
+                return;
+            }
+            sem_post(&found_lock);
 
             if (work_que->size >= list_max)
             {
@@ -132,7 +129,7 @@ void generate_words(Queue *work_que, int word_length)
             // printf("[%s]\n",tmp);
             queue_enqueue(work_que, tmp);
             sem_post(&full);
-            if (!list_max_found && (avail_mem / tot_mem) < 0.1)
+            if (!list_max_found && (avail_mem / tot_mem) < 0.8)
             {
                 list_max = work_que->size;
                 list_max_found = true;
@@ -147,9 +144,9 @@ void generate_words(Queue *work_que, int word_length)
     sem_post(&mutex);
 }
 
-unsigned long calc_total_problem_size(int word_length)
+unsigned long calc_total_problem_size(int word_length, int charset_size)
 {
-    return pow(CHAR_END - CHAR_START + 1, word_length);
+    return pow(charset_size, word_length);
 }
 
 void *thread_pool(void *arg)
@@ -163,7 +160,6 @@ void *thread_pool(void *arg)
     int target_length = args->target_length;
     char target[target_length];
     memcpy(target, args->global_target, target_length);
-    SHA256_CTX ctx;
 
     while (1)
     {
@@ -273,15 +269,15 @@ void *thread_pool(void *arg)
                 }
             }
 
-            sha256_init(&ctx);
-            sha256_update(&ctx, (const unsigned char *)words[i], strlen((char *)words[i]));
-            BYTE buf[SHA256_BLOCK_SIZE];
-            sha256_final(&ctx, buf);
-            unsigned char padded_buf[(SHA256_BLOCK_SIZE * 2) + 1];
-            memset(padded_buf, '\0', sizeof(unsigned char) * 65);
-            pad_string(buf, padded_buf);
+            unsigned char * digest = md5String(words[i]);
+    
+            char res[33];
+            for(int i = 0; i < 16; ++i){
+                sprintf(&res[i*2], "%02x", (int)digest[i]);
+            }
+            free(digest);
 
-            if (memcmp(target, padded_buf, sizeof(unsigned char) * 64) == 0)
+            if (strncmp(target, res, 32) == 0)
             {
                 args->time = clock() - args->time;
                 sem_wait(&found_lock);
@@ -332,7 +328,7 @@ int main(int argc, char **argv)
     signal(SIGINT, sig_handler);
     found = 0;
     char *target = argv[2];
-    unsigned long total_problem_size = calc_total_problem_size(word_length);
+    unsigned long total_problem_size = atoi(argv[4]);
     if (total_problem_size == 0)
     {
         fprintf(stderr, "Cant handle size\n");
