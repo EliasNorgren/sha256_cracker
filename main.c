@@ -24,202 +24,77 @@
 #include <sys/sysinfo.h>
 
 #include "md5.h"
-#include "queue.h"
-
-#define CHAR_START 33
-#define CHAR_END 125
-#define THREAD_BUFFERT 100
 
 typedef struct info
 {
-    Queue *que;
-    const char *global_target;
-    const int target_length;
-    const int no_threads;
-    char *answer;
-    int feeder_done;
+    char ** strings;
+    const char *target;
     time_t time;
-    unsigned long total_problem_size;
-    unsigned long work_done;
-    int i;
+    int start_index;
+    int end_index;
 } info;
 
 int found = 0;
 
-sem_t mutex;
-sem_t threads_at_work;
-sem_t empty;
-sem_t full;
-sem_t fuck_mutex;
-sem_t memory_mutex;
-
-FILE *out;
-FILE *gereate_out;
-
-void generate_words(Queue *work_que, int word_length)
+void generate_words(char ** strings, int word_length, FILE* input, int rows)
 {
-    char tmp[word_length + 1];
-    memset(tmp, 0, sizeof(char) * word_length + 1);
-
     printf("Producer producing\n");
 
-    while (true)
+    for(int i = 0; i < rows; i++)
     {
-        char *ret = fgets(tmp, word_length + 1, stdin);
+        strings[i] = malloc(sizeof(char) * (word_length + 2));
+        fgets(strings[i], word_length + 2, input);
 
-        if (ret == NULL)
-        {
-            printf("Producer done!\n");
-            return;
-        }
+        // if (ret == NULL)
+        // {
+        //     printf("Producer done!\n");
+        //     return;
+        // }
 
-        if (tmp[0] == '\n')
+        if (strings[i][0] == '\n')
         {
             continue;
         }
 
-        tmp[word_length] = '\0';
-        queue_enqueue(work_que, tmp);
+        strings[i][word_length] = '\0';
     }
 }
 
 void *thread_pool(void *arg)
 {
     pid_t id = pthread_self();
-
-    printf("%u started\n", id);
-
     info *args = (info *)arg;
-    int threads_local = args->no_threads;
-    int target_length = args->target_length;
-    char target[target_length];
-    memcpy(target, args->global_target, target_length);
-
-    while (1)
+    printf("%u started doing %d-%d\n", id, args->start_index, args->end_index);
+    
+    for (int i = args->start_index; i < args->end_index; i++)
     {
+        // Optional check
+        // if (i > 10000 && i % 100 == 0)
+        // {
+        //     if (found)
+        //     {
+        //         printf("%u exited while working, someone else found solution\n", id);
+        //         return 0;
+        //     }
+        // }
+        unsigned char *digest = md5String(args->strings[i]);
 
-        if (found)
+        char res[33];
+        for (int i = 0; i < 16; ++i)
         {
-            printf("%u exited becaause someone else found solution\n", id);
+            sprintf(&res[i * 2], "%02x", (int)digest[i]);
+        }
+        free(digest);
+
+        if (strncmp(args->target, res, 32) == 0)
+        {
+            args->time = clock() - args->time;
+            found = 1;
+            printf("ANSWER WAS %s, in %f seconds\n", args->strings[i], ((double)args->time) / CLOCKS_PER_SEC);
             return 0;
         }
-        
-        printf("2 - %u\n", id);
-        sem_wait(&fuck_mutex);
-        printf("3 - %u\n", id);
-        sem_wait(&full);
-        printf("4 - %u\n", id);
-        sem_wait(&mutex);
-
-        int no_words;
-        sem_getvalue(&full, &no_words);
-        no_words++;
-
-        args->i += 1;
-        int threads_working;
-        sem_getvalue(&threads_at_work, &threads_working);
-
-        int respons = args->no_threads >= no_words ? no_words : no_words / (args->no_threads - threads_working);
-
-        long int tot_mem = get_phys_pages() * sysconf(_SC_PAGESIZE);
-        long int avail_mem = get_avphys_pages() * sysconf(_SC_PAGESIZE);
-        printf("QUE = %d - RESPONSE = %d - %f %% klart - MEM %% = %f - id = %u\n", no_words, respons, (100 * (double)args->work_done / args->total_problem_size), 100 * (1.0 - ((double)avail_mem / tot_mem)), id);
-
-
-        if (respons >= queue_size(args->que))
-        {
-            printf("Response >= queue_size %u\n", id);
-            respons = queue_size(args->que);
-            int mem_mutex_val;
-            sem_getvalue(&memory_mutex, &mem_mutex_val);
-            if (mem_mutex_val == 0)
-            {
-                printf("Mem_post 1 %u - -- - - --\n", id);
-                sem_post(&memory_mutex);
-            }
-        }
-
-        if (respons <= 1000000)
-        {
-            printf("Response under %u\n", id);
-            int mem_mutex_val;
-            sem_getvalue(&memory_mutex, &mem_mutex_val);
-            if (mem_mutex_val == 0)
-            {
-                printf("Mem_post 2  %u - -- - - --\n", id);
-                sem_post(&memory_mutex);
-            }
-        }
-
-        char **words = malloc(sizeof(char *) * respons);
-
-        args->work_done += respons;
-        for (int i = 0; i < respons; i++)
-        {
-
-            words[i] = queue_dequeue(args->que);
-            if (i != 0)
-            {
-                sem_wait(&full);
-            }
-        }
-
-        sem_post(&fuck_mutex);
-        sem_post(&mutex);
-
-
-        sem_post(&threads_at_work);
-
-        for (int i = 0; i < respons; i++)
-        {
-
-            if (i > 10000 && i % 100 == 0)
-            {
-                if (found)
-                {
-                    for (int j = i; j < respons; j++)
-                    {
-                        free(words[j]);
-                    }
-                    free(words);
-                    printf("%u exited while working becaause someone else found solution\n", id);
-                    return 0;
-                }
-            }
-
-            unsigned char *digest = md5String(words[i]);
-
-            char res[33];
-            for (int i = 0; i < 16; ++i)
-            {
-                sprintf(&res[i * 2], "%02x", (int)digest[i]);
-            }
-            free(digest);
-
-            if (strncmp(target, res, 32) == 0)
-            {
-                args->time = clock() - args->time;
-                args->answer = words[i];
-                found = 1;
-                for (int j = i + 1; j < respons; j++)
-                {
-                    free(words[j]);
-                }
-                printf("%u exited and found word: %s-------------------------------------------------------\n", id, words[i]);
-                free(words);
-                for (int i = 0; i < threads_local + 1; i++)
-                {
-                    sem_post(&fuck_mutex);
-                    sem_post(&full);
-                }
-                return 0;
-            }
-            free(words[i]);
-        }
-        free(words);
-        sem_wait(&threads_at_work);
     }
-    printf("%u exited after loop, weird\n", id);
+    printf("%u exiting\n", id);
     return 0;
 }
 
@@ -230,56 +105,55 @@ void sig_handler(int signum)
     exit(1);
 }
 
+// ./asd hash1 wordslist2 no_words3 wordlengths4 trheads5
+
 int main(int argc, char **argv)
 {
 
-    out = fopen("outputdata", "w");
-    gereate_out = fopen("generate_out", "w");
-
-    const int word_length = atoi(argv[1]);
+    const int word_length = atoi(argv[4]);
     printf("word length is %d\n", word_length);
 
     signal(SIGINT, sig_handler);
     found = 0;
-    char *target = argv[2];
-    unsigned long total_problem_size = atoi(argv[4]);
+    char *target = argv[1];
+    unsigned long total_problem_size = atoi(argv[3]);
     if (total_problem_size == 0)
     {
         fprintf(stderr, "Cant handle size\n");
         exit(0);
     }
     printf("total problem size = %ld\n", total_problem_size);
-    int no_threads = atoi(argv[3]);
-
-    sem_init(&mutex, 0, 1);
-    sem_init(&threads_at_work, 0, 0);
-    sem_init(&empty, 0, total_problem_size);
-    sem_init(&full, 0, 0);
-    sem_init(&fuck_mutex, 0, 1);
-    sem_init(&memory_mutex, 0, 0);
+    int no_threads = atoi(argv[5]);
 
     pthread_t cracker_threads[no_threads];
-    Queue *work_que = queue_create();
+    char** strings = malloc(sizeof(char *) * total_problem_size);
 
-    int target_lenthg = strlen(argv[2]);
-    info arguments = {
-        .que = work_que,
-        .global_target = target,
-        .target_length = target_lenthg,
-        .no_threads = no_threads,
-        .total_problem_size = total_problem_size,
-        .work_done = 0,
-    };
-
-    generate_words(work_que, word_length);
+    FILE* word_file = fopen(argv[2], "r");
+    generate_words(strings, word_length, word_file, total_problem_size);
     printf("Read words with length %d\n", word_length);
-    printf("---- words created by generator feeder done------------\n");
+    printf("---- words created by generator feeder done------\n");
 
-    arguments.time = clock();
 
+    info args[no_threads];
+
+    int steps = total_problem_size / no_threads;
+    int index = 0;
     for (int i = 0; i < no_threads; i++)
     {
-        pthread_create(&cracker_threads[i], NULL, thread_pool, &arguments);
+        args[i].time = clock();
+        args[i].strings = strings;
+        args[i].target = target;
+        
+        if(i == no_threads - 1){
+            args[i].start_index = index;
+            args[i].end_index = total_problem_size - 1;
+        }else{
+            args[i].start_index = index;
+            index += steps;
+            args[i].end_index = index - 1;
+        }
+
+        pthread_create(&cracker_threads[i], NULL, thread_pool, &args[i]);
     }
 
     for (int i = 0; i < no_threads; i++)
@@ -287,16 +161,12 @@ int main(int argc, char **argv)
         pthread_join(cracker_threads[i], NULL);
     }
 
-    queue_destroy(work_que);
-    sem_destroy(&mutex);
-    sem_destroy(&threads_at_work);
-    sem_destroy(&fuck_mutex);
-    sem_destroy(&memory_mutex);
 
-    printf("ANSWER WAS %s\n", arguments.answer);
-    printf("Generated in %f seconds\n", ((double)arguments.time) / CLOCKS_PER_SEC);
-    free(arguments.answer);
-    fclose(out);
-    fclose(gereate_out);
+    for(int i = 0; i < total_problem_size; i++){
+        free(strings[i]);
+    }
+    free(strings);
+    fclose(word_file);
     return 69;
+
 }
