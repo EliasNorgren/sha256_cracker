@@ -62,7 +62,7 @@ void *thread_pool(void *arg)
     info *args = (info *)arg;
     printf("%u started doing %d-%d\n", id, args->start_index, args->end_index);
 
-    for (int i = args->start_index; i < args->end_index; i++)
+    for (int i = args->start_index; i <= args->end_index; i++)
     {
         // Optional check
         // if (i > 10000 && i % 100 == 0)
