@@ -22,34 +22,28 @@
 #include <ulimit.h>
 #include <time.h>
 #include <sys/sysinfo.h>
+#include <sys/time.h>
 
 #include "md5.h"
 
 typedef struct info
 {
-    char ** strings;
+    char **strings;
     const char *target;
-    time_t time;
     int start_index;
     int end_index;
 } info;
 
 int found = 0;
 
-void generate_words(char ** strings, int word_length, FILE* input, int rows)
+void generate_words(char **strings, int word_length, FILE *input, int rows)
 {
     printf("Producer producing\n");
 
-    for(int i = 0; i < rows; i++)
+    for (int i = 0; i < rows; i++)
     {
         strings[i] = malloc(sizeof(char) * (word_length + 2));
         fgets(strings[i], word_length + 2, input);
-
-        // if (ret == NULL)
-        // {
-        //     printf("Producer done!\n");
-        //     return;
-        // }
 
         if (strings[i][0] == '\n')
         {
@@ -62,10 +56,12 @@ void generate_words(char ** strings, int word_length, FILE* input, int rows)
 
 void *thread_pool(void *arg)
 {
+    struct timeval t0, t1, dt;
+    gettimeofday(&t0, NULL);
     pid_t id = pthread_self();
     info *args = (info *)arg;
     printf("%u started doing %d-%d\n", id, args->start_index, args->end_index);
-    
+
     for (int i = args->start_index; i < args->end_index; i++)
     {
         // Optional check
@@ -88,9 +84,10 @@ void *thread_pool(void *arg)
 
         if (strncmp(args->target, res, 32) == 0)
         {
-            args->time = clock() - args->time;
             found = 1;
-            printf("ANSWER WAS %s, in %f seconds\n", args->strings[i], ((double)args->time) / CLOCKS_PER_SEC);
+            gettimeofday(&t1, NULL);
+            timersub(&t1, &t0, &dt);
+            printf("%u index = %d ANSWER WAS %s took %ld.%06ld sec\n", id, i, args->strings[i], dt.tv_sec, dt.tv_usec);
             return 0;
         }
     }
@@ -105,7 +102,7 @@ void sig_handler(int signum)
     exit(1);
 }
 
-// ./asd hash1 wordslist2 no_words3 wordlengths4 trheads5
+// ./asd hash1 wordslist2 no_words3 wordlengths4
 
 int main(int argc, char **argv)
 {
@@ -123,50 +120,58 @@ int main(int argc, char **argv)
         exit(0);
     }
     printf("total problem size = %ld\n", total_problem_size);
-    int no_threads = atoi(argv[5]);
 
-    pthread_t cracker_threads[no_threads];
-    char** strings = malloc(sizeof(char *) * total_problem_size);
+    char **strings = malloc(sizeof(char *) * total_problem_size);
 
-    FILE* word_file = fopen(argv[2], "r");
+    FILE *word_file = fopen(argv[2], "r");
     generate_words(strings, word_length, word_file, total_problem_size);
     printf("Read words with length %d\n", word_length);
     printf("---- words created by generator feeder done------\n");
 
-
-    info args[no_threads];
-
-    int steps = total_problem_size / no_threads;
-    int index = 0;
-    for (int i = 0; i < no_threads; i++)
+    while (true)
     {
-        args[i].time = clock();
-        args[i].strings = strings;
-        args[i].target = target;
-        
-        if(i == no_threads - 1){
-            args[i].start_index = index;
-            args[i].end_index = total_problem_size - 1;
-        }else{
-            args[i].start_index = index;
-            index += steps;
-            args[i].end_index = index - 1;
+
+
+        int no_threads;
+        printf("Enter no_threads, -1 to exit\n");
+        scanf("%d", &no_threads);
+        if(no_threads == -1){
+            break;
+        }
+        info args[no_threads];
+        pthread_t cracker_threads[no_threads];
+        int steps = total_problem_size / no_threads;
+        int index = 0;
+        for (int i = 0; i < no_threads; i++)
+        {
+            args[i].strings = strings;
+            args[i].target = target;
+            if (i == no_threads - 1)
+            {
+                args[i].start_index = index;
+                args[i].end_index = total_problem_size - 1;
+            }
+            else
+            {
+                args[i].start_index = index;
+                index += steps;
+                args[i].end_index = index - 1;
+            }
+
+            pthread_create(&cracker_threads[i], NULL, thread_pool, &args[i]);
         }
 
-        pthread_create(&cracker_threads[i], NULL, thread_pool, &args[i]);
+        for (int i = 0; i < no_threads; i++)
+        {
+            pthread_join(cracker_threads[i], NULL);       
+        }
     }
-
-    for (int i = 0; i < no_threads; i++)
+    printf("Cleaning up\n");
+    for (int i = 0; i < total_problem_size; i++)
     {
-        pthread_join(cracker_threads[i], NULL);
-    }
-
-
-    for(int i = 0; i < total_problem_size; i++){
         free(strings[i]);
     }
     free(strings);
     fclose(word_file);
     return 69;
-
 }
